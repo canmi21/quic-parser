@@ -11,7 +11,7 @@ readme = "README.md"
 repository = "https://github.com/canmi21/quic-parser.git"
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["full"]
 
 [dependencies]
 aes = { version = "0.8", optional = true }
@@ -26,6 +26,13 @@ ring = ["dep:ring", "dep:aes"]
 aws-lc-rs = ["dep:aws-lc-rs", "dep:aes"]
 tracing = ["dep:tracing"]
 full = ["ring", "tracing"]
+
+[[example]]
+name = "parse_header"
+
+[[example]]
+name = "decrypt_initial"
+required-features = ["ring"]
 
 [dev-dependencies]
 
