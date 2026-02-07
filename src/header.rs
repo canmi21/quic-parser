@@ -72,7 +72,10 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 			have: packet.len(),
 		})?)?;
 	let cursor = cursor + varint_len;
-	let token_len = token_len as usize;
+	let token_len = usize::try_from(token_len).map_err(|_| Error::BufferTooShort {
+		need: usize::MAX,
+		have: packet.len(),
+	})?;
 
 	if cursor + token_len > packet.len() {
 		return Err(Error::BufferTooShort {
@@ -89,7 +92,10 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 			have: packet.len(),
 		})?)?;
 	let cursor = cursor + varint_len;
-	let remaining_len = remaining_len as usize;
+	let remaining_len = usize::try_from(remaining_len).map_err(|_| Error::BufferTooShort {
+		need: usize::MAX,
+		have: packet.len(),
+	})?;
 
 	if cursor + remaining_len > packet.len() {
 		return Err(Error::BufferTooShort {

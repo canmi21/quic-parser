@@ -44,7 +44,9 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 						offset: cursor as u64,
 					})?)?;
 				cursor += len_len;
-				let length = length as usize;
+				let length = usize::try_from(length).map_err(|_| Error::TruncatedFrame {
+					offset: cursor as u64,
+				})?;
 
 				if cursor + length > decrypted.len() {
 					return Err(Error::TruncatedFrame { offset });
@@ -54,12 +56,58 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 				frames.push(CryptoFrame { offset, data });
 				cursor += length;
 			}
+			// PADDING / PING
 			0x00 | 0x01 => {}
+			// ACK (0x02) and ACK_ECN (0x03): consume all varint fields
+			0x02 | 0x03 => {
+				cursor = skip_ack_frame(decrypted, cursor, frame_type == 0x03)?;
+			}
 			_ => break,
 		}
 	}
 
 	Ok(frames)
+}
+
+/// Skip over an ACK frame by consuming all its varint fields.
+///
+/// Layout (RFC 9000 Section 19.3):
+///   Largest Acknowledged (i), ACK Delay (i), ACK Range Count (i),
+///   First ACK Range (i), { Gap (i), ACK Range Length (i) } * count,
+///   [ECN Counts: ECT0 (i), ECT1 (i), ECN-CE (i)]  — only for type 0x03.
+fn skip_ack_frame(buf: &[u8], mut cursor: usize, has_ecn: bool) -> Result<usize, Error> {
+	let trunc = |pos: usize| Error::TruncatedFrame { offset: pos as u64 };
+
+	// Largest Acknowledged
+	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+	cursor += len;
+	// ACK Delay
+	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+	cursor += len;
+	// ACK Range Count
+	let (range_count, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+	cursor += len;
+	// First ACK Range
+	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+	cursor += len;
+
+	// Each additional ACK Range: Gap (i) + ACK Range Length (i)
+	for _ in 0..range_count {
+		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+		cursor += len;
+		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+		cursor += len;
+	}
+
+	// ECN Counts (only for ACK_ECN, type 0x03)
+	if has_ecn {
+		for _ in 0..3 {
+			let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
+			cursor += len;
+		}
+	}
+
+	Ok(cursor)
 }
 
 /// Reassemble CRYPTO frames into a contiguous byte stream.
