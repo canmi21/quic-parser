@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 /* examples/parse_header.rs */
 
 // Demonstrates parsing a QUIC Initial packet header without any crypto
@@ -13,8 +14,8 @@ fn main() {
 		Ok(header) => {
 			println!("QUIC Initial packet parsed successfully");
 			println!("  version:      {:#010x}", header.version);
-			println!("  dcid:         {}", hex(&header.dcid));
-			println!("  scid:         {}", hex(&header.scid));
+			println!("  dcid:         {}", hex(header.dcid));
+			println!("  scid:         {}", hex(header.scid));
 			println!("  token length: {}", header.token.len());
 			println!("  payload size: {} bytes", header.payload.len());
 		}

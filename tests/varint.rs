@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 /* tests/varint.rs */
 
 use quic_parser::{Error, read_varint};

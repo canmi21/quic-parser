@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 /* tests/header.rs */
 
 use quic_parser::{Error, parse_initial, peek_long_header_dcid, peek_short_header_dcid};

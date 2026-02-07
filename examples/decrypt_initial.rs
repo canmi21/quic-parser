@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 /* examples/decrypt_initial.rs */
 
 // Demonstrates the full decrypt flow: parse header, decrypt payload, extract
