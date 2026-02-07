@@ -1,47 +1,38 @@
-# Sigterm
+# quic-parser
 
-Signal-aware async control and cancellation primitives for Tokio.
+Zero-copy QUIC Initial packet parser with optional payload decryption.
 
-`sigterm` abstracts away the boilerplate of listening for system signals (`Ctrl+C`, `SIGTERM`, etc.) and coordinating shutdown across multiple asynchronous tasks.
+`quic-parser` extracts headers, connection IDs, and tokens from QUIC Initial packets without allocating. When a crypto backend is enabled, it can also decrypt payloads and reassemble CRYPTO frames for both QUIC v1 (RFC 9001) and v2 (RFC 9369).
 
 ## Features
 
-- **Signal Waiting**: Wait for `Ctrl+C` or `SIGTERM` across platforms with a single `await`. Use `try_wait()` for non-panicking version.
-- **Cancellation Tokens**: Hierarchy-based cancellation (parent cancels child) powered by `tokio-util`.
-- **Shutdown Primitives**:
-  - `Shutdown`: One-shot channel for single-task termination.
-  - `Broadcast`: Notify multiple subscribers of a shutdown event.
-  - `ShutdownGuard`: RAII guard that triggers shutdown when dropped (useful for panics).
-- **Framework Integration**: `shutdown_signal()` helper designed for seamless integration with `axum::serve`.
-- **Unix Extensions**: Listen for custom signal sets (`SIGHUP`, `SIGQUIT`, etc.) on Unix systems.
+- **Header Parsing**: Zero-copy parsing of QUIC Initial packet headers with no crypto dependencies.
+- **Connection ID Peek**: Fast extraction of Destination Connection IDs from both Long and Short Header packets.
+- **VarInt Decoding**: QUIC variable-length integer decoder (RFC 9000 Section 16).
+- **Payload Decryption**: HKDF-SHA256 key derivation, AES-ECB header protection removal, and AES-128-GCM AEAD decryption.
+- **Frame Extraction**: Parse CRYPTO frames from decrypted payloads and reassemble them into a contiguous byte stream.
+- **Dual Crypto Backend**: Choose between `ring` and `aws-lc-rs` as the cryptographic provider.
 
 ## Usage Examples
 
 Check the `examples` directory for runnable code:
 
-- **Basic Usage**: [`examples/simple.rs`](examples/simple.rs) - Wait for a simple shutdown signal.
-- **Server Integration**: [`examples/shutdown_signal.rs`](examples/shutdown_signal.rs) - Combine system signals with internal cancellation (e.g., for Axum).
-- **Task Orchestration**: [`examples/broadcast.rs`](examples/broadcast.rs) - Coordinate multiple workers.
-- **Hierarchical Cancellation**: [`examples/cancellation.rs`](examples/cancellation.rs) - Manage tree-structured tasks.
-- **Scope Guard**: [`examples/guard.rs`](examples/guard.rs) - Ensure shutdown on exit or panic.
+- **Header Only**: [`examples/parse_header.rs`](examples/parse_header.rs) - Parse headers and peek at connection IDs without crypto.
+- **Full Decrypt**: [`examples/decrypt_initial.rs`](examples/decrypt_initial.rs) - Decrypt a QUIC v1 Initial packet and extract the TLS ClientHello.
 
 ## Installation
 
 ```toml
 [dependencies]
-sigterm = { version = "0.3", features = ["full"] }
+quic-parser = { version = "0.x", features = ["full"] }
 ```
 
 ## Feature Flags
 
 | Feature | Description |
 |---------|-------------|
-| `signal` | Enables signal handling (Ctrl+C, SIGTERM) - enabled by default. |
-| `sync` | Enables synchronization primitives (`Shutdown`, `Broadcast`). |
-| `macros` | Enables Tokio macro support. |
-| `rt` | Enables Tokio runtime support (required for `wait_for`). |
-| `cancel` | Enables hierarchical cancellation tokens via `tokio-util`. |
-| `time` | Enables timeout support for signal waiting. |
+| `ring` | Enables decryption using `ring` as the crypto backend (default). |
+| `aws-lc-rs` | Enables decryption using `aws-lc-rs` as the crypto backend. |
 | `tracing` | Enables optional tracing instrumentation for debugging. |
 | `full` | Enables all features above. |
 
