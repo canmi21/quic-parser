@@ -1,5 +1,6 @@
-#![cfg(any(feature = "ring", feature = "aws-lc-rs"))]
 /* tests/decrypt.rs */
+
+#![cfg(any(feature = "ring", feature = "aws-lc-rs"))]
 #![allow(missing_docs)]
 
 use quic_parser::{

@@ -1,5 +1,6 @@
-#![allow(missing_docs)]
 /* examples/parse_header.rs */
+
+#![allow(missing_docs)]
 
 // Demonstrates parsing a QUIC Initial packet header without any crypto
 // dependency. This example works with all feature configurations including

@@ -1,5 +1,6 @@
-#![allow(missing_docs)]
 /* examples/decrypt_initial.rs */
+
+#![allow(missing_docs)]
 
 // Demonstrates the full decrypt flow: parse header, decrypt payload, extract
 // CRYPTO frames, and reassemble the crypto stream.
