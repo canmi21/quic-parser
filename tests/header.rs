@@ -60,6 +60,13 @@ fn parse_with_token() {
 }
 
 #[test]
+fn reject_missing_fixed_bit() {
+	let mut pkt = build_initial(1, &[0x01], &[], &[], &[0; 20]);
+	pkt[0] = 0x80; // Long header but missing fixed bit
+	assert!(matches!(parse_initial(&pkt), Err(Error::InvalidFixedBit)));
+}
+
+#[test]
 fn reject_short_header() {
 	let pkt = [0x40, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00];
 	assert!(matches!(parse_initial(&pkt), Err(Error::NotLongHeader)));

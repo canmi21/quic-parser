@@ -16,6 +16,10 @@ pub enum Error {
 	#[error("not a QUIC long header packet")]
 	NotLongHeader,
 
+	/// The fixed bit (bit 6) of the first byte is not set to 1.
+	#[error("QUIC fixed bit is not set")]
+	InvalidFixedBit,
+
 	/// The packet is a long header but not an Initial packet.
 	#[error("not an Initial packet (type bits: {0:#04x})")]
 	NotInitialPacket(u8),

@@ -1,7 +1,6 @@
 #![cfg(any(feature = "ring", feature = "aws-lc-rs"))]
 /* tests/decrypt.rs */
 #![allow(missing_docs)]
-/* tests/decrypt.rs */
 
 use quic_parser::{
 	CryptoFrame, decrypt_initial, parse_crypto_frames, parse_initial, reassemble_crypto_stream,

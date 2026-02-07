@@ -48,6 +48,10 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		return Err(Error::NotLongHeader);
 	}
 
+	if (first_byte & 0x40) == 0 {
+		return Err(Error::InvalidFixedBit);
+	}
+
 	let packet_type = (first_byte & 0x30) >> 4;
 	if packet_type != 0 {
 		return Err(Error::NotInitialPacket(packet_type));
