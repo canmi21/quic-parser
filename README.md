@@ -1,4 +1,4 @@
-# quic-parser
+# Quic Parser
 
 Zero-copy QUIC Initial packet parser with optional payload decryption.
 
@@ -24,7 +24,7 @@ Check the `examples` directory for runnable code:
 
 ```toml
 [dependencies]
-quic-parser = { version = "0.x", features = ["full"] }
+quic-parser = { version = "0.1", features = ["full"] }
 ```
 
 ## Feature Flags
