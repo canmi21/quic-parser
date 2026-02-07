@@ -1,3 +1,5 @@
+/* src/error.rs */
+
 /// Errors that can occur during QUIC packet parsing and decryption.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

@@ -1,3 +1,5 @@
+/* src/varint.rs */
+
 use crate::error::Error;
 
 /// Decode a QUIC variable-length integer from the start of `buf`.
