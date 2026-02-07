@@ -1,6 +1,5 @@
 #![cfg(any(feature = "ring", feature = "aws-lc-rs"))]
 /* tests/decrypt.rs */
-
 #![allow(missing_docs)]
 /* tests/decrypt.rs */
 
