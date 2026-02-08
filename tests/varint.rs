@@ -132,8 +132,7 @@ fn boundary_four_to_eight_byte() {
 	// Value 1,073,741,824 requires 8 bytes
 	// 1,073,741,824 = 0x40000000
 	// Encoded: 11_000000 00000000 00000000 00000000 01000000 00000000 00000000 00000000
-	let (val, len) =
-		read_varint(&[0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00]).unwrap();
+	let (val, len) = read_varint(&[0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00]).unwrap();
 	assert_eq!(val, 1_073_741_824);
 	assert_eq!(len, 8);
 }
@@ -142,8 +141,7 @@ fn boundary_four_to_eight_byte() {
 fn eight_byte_max() {
 	// Max varint value: 2^62 - 1 = 4,611,686,018,427,387,903 = 0x3FFFFFFFFFFFFFFF
 	// Encoded: 11_111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111
-	let (val, len) =
-		read_varint(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]).unwrap();
+	let (val, len) = read_varint(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]).unwrap();
 	assert_eq!(val, 4_611_686_018_427_387_903);
 	assert_eq!(len, 8);
 }

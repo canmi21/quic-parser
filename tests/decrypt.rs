@@ -4,8 +4,7 @@
 #![allow(missing_docs)]
 
 use quic_parser::{
-	CryptoFrame, Error, decrypt_initial, parse_crypto_frames, parse_initial,
-	reassemble_crypto_stream,
+	CryptoFrame, Error, decrypt_initial, parse_crypto_frames, parse_initial, reassemble_crypto_stream,
 };
 
 fn hex_decode(s: &str) -> Vec<u8> {

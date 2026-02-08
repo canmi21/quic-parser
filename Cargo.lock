@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "quic-parser"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "aes",
  "aws-lc-rs",

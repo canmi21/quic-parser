@@ -48,8 +48,8 @@ fn build_hkdf_label(label: &[u8], context: &[u8], len: usize) -> Result<Vec<u8>,
 	let full_label_len = 6 + label.len();
 	let total = 2 + 1 + full_label_len + 1 + context.len();
 	let mut out = Vec::with_capacity(total);
-	let len_u16 =
-		u16::try_from(len).map_err(|_| Error::DecryptionFailed("HKDF output length overflow".into()))?;
+	let len_u16 = u16::try_from(len)
+		.map_err(|_| Error::DecryptionFailed("HKDF output length overflow".into()))?;
 	let label_u8 = u8::try_from(full_label_len)
 		.map_err(|_| Error::DecryptionFailed("HKDF label length overflow".into()))?;
 	let ctx_u8 = u8::try_from(context.len())

@@ -111,10 +111,12 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		have: packet.len(),
 	})?;
 
-	let payload_end = cursor.checked_add(remaining_len).ok_or(Error::BufferTooShort {
-		need: usize::MAX,
-		have: packet.len(),
-	})?;
+	let payload_end = cursor
+		.checked_add(remaining_len)
+		.ok_or(Error::BufferTooShort {
+			need: usize::MAX,
+			have: packet.len(),
+		})?;
 	if payload_end > packet.len() {
 		return Err(Error::BufferTooShort {
 			need: payload_end,
