@@ -44,17 +44,23 @@ fn version_params(version: u32) -> Result<VersionParams, Error> {
 	}
 }
 
-fn build_hkdf_label(label: &[u8], context: &[u8], len: usize) -> Vec<u8> {
+fn build_hkdf_label(label: &[u8], context: &[u8], len: usize) -> Result<Vec<u8>, Error> {
 	let full_label_len = 6 + label.len();
 	let total = 2 + 1 + full_label_len + 1 + context.len();
 	let mut out = Vec::with_capacity(total);
-	out.extend_from_slice(&(len as u16).to_be_bytes());
-	out.push(full_label_len as u8);
+	let len_u16 =
+		u16::try_from(len).map_err(|_| Error::DecryptionFailed("HKDF output length overflow".into()))?;
+	let label_u8 = u8::try_from(full_label_len)
+		.map_err(|_| Error::DecryptionFailed("HKDF label length overflow".into()))?;
+	let ctx_u8 = u8::try_from(context.len())
+		.map_err(|_| Error::DecryptionFailed("HKDF context length overflow".into()))?;
+	out.extend_from_slice(&len_u16.to_be_bytes());
+	out.push(label_u8);
 	out.extend_from_slice(b"tls13 ");
 	out.extend_from_slice(label);
-	out.push(context.len() as u8);
+	out.push(ctx_u8);
 	out.extend_from_slice(context);
-	out
+	Ok(out)
 }
 
 fn remove_header_protection(
@@ -109,7 +115,7 @@ mod backend {
 	pub(super) fn derive_client_initial_secret(salt: &[u8], dcid: &[u8]) -> Result<Vec<u8>, Error> {
 		let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt);
 		let initial_secret = salt.extract(dcid);
-		let label = super::build_hkdf_label(b"client in", &[], 32);
+		let label = super::build_hkdf_label(b"client in", &[], 32)?;
 		expand_prk(&initial_secret, &label, 32)
 	}
 
@@ -119,7 +125,7 @@ mod backend {
 		len: usize,
 	) -> Result<Vec<u8>, Error> {
 		let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, secret);
-		let info = super::build_hkdf_label(label, &[], len);
+		let info = super::build_hkdf_label(label, &[], len)?;
 		expand_prk(&prk, &info, len)
 	}
 
@@ -169,7 +175,7 @@ mod backend {
 	pub(super) fn derive_client_initial_secret(salt: &[u8], dcid: &[u8]) -> Result<Vec<u8>, Error> {
 		let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt);
 		let initial_secret = salt.extract(dcid);
-		let label = super::build_hkdf_label(b"client in", &[], 32);
+		let label = super::build_hkdf_label(b"client in", &[], 32)?;
 		expand_prk(&initial_secret, &label, 32)
 	}
 
@@ -179,7 +185,7 @@ mod backend {
 		len: usize,
 	) -> Result<Vec<u8>, Error> {
 		let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, secret);
-		let info = super::build_hkdf_label(label, &[], len);
+		let info = super::build_hkdf_label(label, &[], len)?;
 		expand_prk(&prk, &info, len)
 	}
 
@@ -227,8 +233,7 @@ mod backend {
 /// Returns [`Error::DecryptionFailed`] if any cryptographic operation fails.
 /// Returns [`Error::BufferTooShort`] if the payload is too short for header
 /// protection removal.
-pub fn decrypt_initial(packet: &[u8], header: &InitialHeader<'_>) -> Result<Vec<u8>, Error> {
-	let _ = packet;
+pub fn decrypt_initial(header: &InitialHeader<'_>) -> Result<Vec<u8>, Error> {
 	let params = version_params(header.version)?;
 
 	let client_secret = backend::derive_client_initial_secret(params.salt, header.dcid)?;

@@ -129,6 +129,12 @@ pub fn reassemble_crypto_stream(frames: &[CryptoFrame]) -> Vec<u8> {
 			next_offset += frame.data.len() as u64;
 		} else if frame.offset < next_offset {
 			let skip = (next_offset - frame.offset) as usize;
+			// Verify overlapping data matches (RFC 9000 §19.6).
+			let overlap = skip.min(frame.data.len());
+			let overlap_start = frame.offset as usize;
+			if stream[overlap_start..overlap_start + overlap] != frame.data[..overlap] {
+				break;
+			}
 			if skip < frame.data.len() {
 				stream.extend_from_slice(&frame.data[skip..]);
 				next_offset += (frame.data.len() - skip) as u64;

@@ -53,9 +53,6 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 	}
 
 	let packet_type = (first_byte & 0x30) >> 4;
-	if packet_type != 0 {
-		return Err(Error::NotInitialPacket(packet_type));
-	}
 
 	let mut cursor = 1;
 
@@ -66,6 +63,15 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		packet[cursor + 3],
 	]);
 	cursor += 4;
+
+	// QUIC v2 (RFC 9369) remaps the type field: Initial = 0b01.
+	let expected_initial_type = match version {
+		0x6b33_43cf => 1,
+		_ => 0,
+	};
+	if packet_type != expected_initial_type {
+		return Err(Error::NotInitialPacket(packet_type));
+	}
 
 	let (dcid, cursor) = read_cid(packet, cursor)?;
 	let (scid, cursor) = read_cid(packet, cursor)?;
@@ -81,14 +87,18 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		have: packet.len(),
 	})?;
 
-	if cursor + token_len > packet.len() {
+	let token_end = cursor.checked_add(token_len).ok_or(Error::BufferTooShort {
+		need: usize::MAX,
+		have: packet.len(),
+	})?;
+	if token_end > packet.len() {
 		return Err(Error::BufferTooShort {
-			need: cursor + token_len,
+			need: token_end,
 			have: packet.len(),
 		});
 	}
-	let token = &packet[cursor..cursor + token_len];
-	let cursor = cursor + token_len;
+	let token = &packet[cursor..token_end];
+	let cursor = token_end;
 
 	let (remaining_len, varint_len) =
 		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
@@ -101,15 +111,19 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		have: packet.len(),
 	})?;
 
-	if cursor + remaining_len > packet.len() {
+	let payload_end = cursor.checked_add(remaining_len).ok_or(Error::BufferTooShort {
+		need: usize::MAX,
+		have: packet.len(),
+	})?;
+	if payload_end > packet.len() {
 		return Err(Error::BufferTooShort {
-			need: cursor + remaining_len,
+			need: payload_end,
 			have: packet.len(),
 		});
 	}
 
 	let header_bytes = &packet[..cursor];
-	let payload = &packet[cursor..cursor + remaining_len];
+	let payload = &packet[cursor..payload_end];
 
 	Ok(InitialHeader {
 		version,
@@ -130,6 +144,9 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 #[must_use]
 pub fn peek_long_header_dcid(packet: &[u8]) -> Option<&[u8]> {
 	if packet.len() < 6 {
+		return None;
+	}
+	if (packet[0] & 0x80) == 0 {
 		return None;
 	}
 	let dcid_len = packet[5] as usize;

@@ -26,7 +26,7 @@ fn main() {
 	println!("  scid:    {}", hex(header.scid));
 	println!("  payload: {} bytes", header.payload.len());
 
-	let decrypted = match quic_parser::decrypt_initial(&packet, &header) {
+	let decrypted = match quic_parser::decrypt_initial(&header) {
 		Ok(d) => d,
 		Err(e) => {
 			eprintln!("decryption error: {e}");

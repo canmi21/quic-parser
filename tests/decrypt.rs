@@ -106,7 +106,7 @@ fn decrypt_rfc9001_v1_client_initial() {
 	assert!(header.scid.is_empty());
 	assert_eq!(header.payload.len(), 1182);
 
-	let decrypted = decrypt_initial(&packet, &header).unwrap();
+	let decrypted = decrypt_initial(&header).unwrap();
 	assert!(!decrypted.is_empty());
 
 	let frames = parse_crypto_frames(&decrypted).unwrap();
@@ -126,7 +126,7 @@ fn decrypt_wrong_version_fails() {
 	let mut header = parse_initial(&packet).unwrap();
 	header.version = 0xdeadbeef;
 
-	assert!(decrypt_initial(&packet, &header).is_err());
+	assert!(decrypt_initial(&header).is_err());
 }
 
 #[test]
