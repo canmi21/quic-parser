@@ -207,11 +207,11 @@ fn reassemble_in_order() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"hello".to_vec(),
+			data: b"hello",
 		},
 		CryptoFrame {
 			offset: 5,
-			data: b" world".to_vec(),
+			data: b" world",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"hello world");
@@ -222,11 +222,11 @@ fn reassemble_out_of_order() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 5,
-			data: b" world".to_vec(),
+			data: b" world",
 		},
 		CryptoFrame {
 			offset: 0,
-			data: b"hello".to_vec(),
+			data: b"hello",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"hello world");
@@ -237,11 +237,11 @@ fn reassemble_with_gap() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"hello".to_vec(),
+			data: b"hello",
 		},
 		CryptoFrame {
 			offset: 10,
-			data: b"world".to_vec(),
+			data: b"world",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"hello");
@@ -252,11 +252,11 @@ fn reassemble_overlapping() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"hello".to_vec(),
+			data: b"hello",
 		},
 		CryptoFrame {
 			offset: 3,
-			data: b"lo world".to_vec(),
+			data: b"lo world",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"hello world");
@@ -264,7 +264,7 @@ fn reassemble_overlapping() {
 
 #[test]
 fn reassemble_empty() {
-	let frames: Vec<CryptoFrame> = Vec::new();
+	let frames: Vec<CryptoFrame<'_>> = Vec::new();
 	assert!(reassemble_crypto_stream(&frames).is_empty());
 }
 
@@ -471,7 +471,7 @@ fn frame_parse_crypto_large_offset() {
 fn reassemble_single_frame() {
 	let frames = vec![CryptoFrame {
 		offset: 0,
-		data: b"single".to_vec(),
+		data: b"single",
 	}];
 	assert_eq!(reassemble_crypto_stream(&frames), b"single");
 }
@@ -481,7 +481,7 @@ fn reassemble_single_frame_nonzero_offset() {
 	// Single frame with offset > 0 → gap from 0, returns empty
 	let frames = vec![CryptoFrame {
 		offset: 5,
-		data: b"later".to_vec(),
+		data: b"later",
 	}];
 	assert!(reassemble_crypto_stream(&frames).is_empty());
 }
@@ -492,11 +492,11 @@ fn reassemble_exact_duplicate() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"dup".to_vec(),
+			data: b"dup",
 		},
 		CryptoFrame {
 			offset: 0,
-			data: b"dup".to_vec(),
+			data: b"dup",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"dup");
@@ -507,15 +507,15 @@ fn reassemble_three_contiguous() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"aaa".to_vec(),
+			data: b"aaa",
 		},
 		CryptoFrame {
 			offset: 3,
-			data: b"bbb".to_vec(),
+			data: b"bbb",
 		},
 		CryptoFrame {
 			offset: 6,
-			data: b"ccc".to_vec(),
+			data: b"ccc",
 		},
 	];
 	assert_eq!(reassemble_crypto_stream(&frames), b"aaabbbccc");
@@ -527,11 +527,11 @@ fn reassemble_overlap_mismatch() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"hello".to_vec(),
+			data: b"hello",
 		},
 		CryptoFrame {
 			offset: 3,
-			data: b"XX world".to_vec(),
+			data: b"XX world",
 		},
 	];
 	// "lo" vs "XX" at overlap → mismatch, reassembly stops
@@ -545,11 +545,11 @@ fn reassemble_contained_frame() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"abcdef".to_vec(),
+			data: b"abcdef",
 		},
 		CryptoFrame {
 			offset: 1,
-			data: b"bcde".to_vec(),
+			data: b"bcde",
 		},
 	];
 	// B is fully covered by A (skip=5 >= B.data.len()=4), nothing new appended
@@ -562,11 +562,11 @@ fn reassemble_contained_frame_mismatch() {
 	let frames = vec![
 		CryptoFrame {
 			offset: 0,
-			data: b"abcdef".to_vec(),
+			data: b"abcdef",
 		},
 		CryptoFrame {
 			offset: 1,
-			data: b"XXXX".to_vec(),
+			data: b"XXXX",
 		},
 	];
 	// Overlap check: stream[1..5] = "bcde" vs frame.data[0..4] = "XXXX" → mismatch

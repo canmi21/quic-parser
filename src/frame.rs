@@ -1,15 +1,15 @@
 /* src/frame.rs */
 
 use crate::error::Error;
-use crate::varint::read_varint;
+use crate::varint::read_varint_at;
 
 /// A single CRYPTO frame extracted from decrypted QUIC payload.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CryptoFrame {
+pub struct CryptoFrame<'data> {
 	/// Byte offset within the crypto stream where this fragment begins.
 	pub offset: u64,
 	/// The raw data carried by this frame.
-	pub data: Vec<u8>,
+	pub data: &'data [u8],
 }
 
 /// Parse all CRYPTO frames from a decrypted Initial packet payload.
@@ -20,39 +20,26 @@ pub struct CryptoFrame {
 ///
 /// # Errors
 ///
-/// Returns [`Error::TruncatedFrame`] if a CRYPTO frame extends beyond the
-/// available data. Returns [`Error::InvalidVarint`] if a varint field is
-/// malformed.
-pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> {
+/// Returns [`Error::BufferTooShort`] if a CRYPTO frame extends beyond the
+/// available data.
+pub fn parse_crypto_frames<'d>(decrypted: &'d [u8]) -> Result<Vec<CryptoFrame<'d>>, Error> {
 	let mut cursor = 0;
 	let mut frames = Vec::new();
 
 	while cursor < decrypted.len() {
-		let (frame_type, len) = read_varint(&decrypted[cursor..])?;
-		cursor += len;
+		let frame_type = read_varint_at(decrypted, &mut cursor)?;
 
 		match frame_type {
 			0x06 => {
-				let (offset, off_len) =
-					read_varint(decrypted.get(cursor..).ok_or(Error::TruncatedFrame {
-						offset: cursor as u64,
-					})?)?;
-				cursor += off_len;
+				let offset = read_varint_at(decrypted, &mut cursor)?;
 
-				let (length, len_len) =
-					read_varint(decrypted.get(cursor..).ok_or(Error::TruncatedFrame {
-						offset: cursor as u64,
-					})?)?;
-				cursor += len_len;
-				let length = usize::try_from(length).map_err(|_| Error::TruncatedFrame {
-					offset: cursor as u64,
-				})?;
+				let length = read_varint_at(decrypted, &mut cursor)? as usize;
 
 				if cursor + length > decrypted.len() {
-					return Err(Error::TruncatedFrame { offset });
+					return Err(Error::BufferTooShort { need: cursor + length, have: decrypted.len() });
 				}
 
-				let data = decrypted[cursor..cursor + length].to_vec();
+				let data = &decrypted[cursor..cursor + length];
 				frames.push(CryptoFrame { offset, data });
 				cursor += length;
 			}
@@ -76,34 +63,25 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 ///   First ACK Range (i), { Gap (i), ACK Range Length (i) } * count,
 ///   [ECN Counts: ECT0 (i), ECT1 (i), ECN-CE (i)]  — only for type 0x03.
 fn skip_ack_frame(buf: &[u8], mut cursor: usize, has_ecn: bool) -> Result<usize, Error> {
-	let trunc = |pos: usize| Error::TruncatedFrame { offset: pos as u64 };
-
 	// Largest Acknowledged
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 	// ACK Delay
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 	// ACK Range Count
-	let (range_count, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	let range_count = read_varint_at(buf, &mut cursor)?;
 	// First ACK Range
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 
 	// Each additional ACK Range: Gap (i) + ACK Range Length (i)
 	for _ in 0..range_count {
-		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-		cursor += len;
-		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-		cursor += len;
+		_ = read_varint_at(buf, &mut cursor)?;
+		_ = read_varint_at(buf, &mut cursor)?;
 	}
 
 	// ECN Counts (only for ACK_ECN, type 0x03)
 	if has_ecn {
 		for _ in 0..3 {
-			let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-			cursor += len;
+			_ = read_varint_at(buf, &mut cursor)?;
 		}
 	}
 
@@ -116,11 +94,11 @@ fn skip_ack_frame(buf: &[u8], mut cursor: usize, has_ecn: bool) -> Result<usize,
 /// fragments starting from offset zero are included; gaps cause the
 /// reassembly to stop at the gap boundary.
 #[must_use]
-pub fn reassemble_crypto_stream(frames: &[CryptoFrame]) -> Vec<u8> {
-	let mut sorted: Vec<&CryptoFrame> = frames.iter().collect();
+pub fn reassemble_crypto_stream<'d>(frames: &[CryptoFrame<'d>]) -> Vec<u8> {
+	let capacity = frames.iter().fold(0, |r, f| r.max(f.offset as usize + f.data.len()));
+	let mut sorted: Vec<&CryptoFrame<'d>> = frames.iter().collect();
 	sorted.sort_by_key(|f| f.offset);
-
-	let mut stream = Vec::new();
+	let mut stream = Vec::with_capacity(capacity);
 	let mut next_offset: u64 = 0;
 
 	for frame in sorted {

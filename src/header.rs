@@ -1,7 +1,10 @@
 /* src/header.rs */
 
 use crate::error::Error;
-use crate::varint::read_varint;
+use crate::varint::read_varint_at;
+
+pub(crate) const QUIC_V1: u32 = 0x0000_0001;
+pub(crate) const QUIC_V2: u32 = 0x6b33_43cf;
 
 /// Parsed QUIC Initial packet header with zero-copy references into the
 /// original packet buffer.
@@ -66,27 +69,17 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 
 	// QUIC v2 (RFC 9369) remaps the type field: Initial = 0b01.
 	let expected_initial_type = match version {
-		0x6b33_43cf => 1,
+		QUIC_V2 => 1,
 		_ => 0,
 	};
 	if packet_type != expected_initial_type {
 		return Err(Error::NotInitialPacket(packet_type));
 	}
 
-	let (dcid, cursor) = read_cid(packet, cursor)?;
-	let (scid, cursor) = read_cid(packet, cursor)?;
+	let dcid = read_cid(packet, &mut cursor)?;
+	let scid = read_cid(packet, &mut cursor)?;
 
-	let (token_len, varint_len) =
-		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
-			need: cursor + 1,
-			have: packet.len(),
-		})?)?;
-	let cursor = cursor + varint_len;
-	let token_len = usize::try_from(token_len).map_err(|_| Error::BufferTooShort {
-		need: usize::MAX,
-		have: packet.len(),
-	})?;
-
+	let token_len = read_varint_at(packet, &mut cursor)? as usize;
 	let token_end = cursor.checked_add(token_len).ok_or(Error::BufferTooShort {
 		need: usize::MAX,
 		have: packet.len(),
@@ -98,18 +91,9 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		});
 	}
 	let token = &packet[cursor..token_end];
-	let cursor = token_end;
+	cursor = token_end;
 
-	let (remaining_len, varint_len) =
-		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
-			need: cursor + 1,
-			have: packet.len(),
-		})?)?;
-	let cursor = cursor + varint_len;
-	let remaining_len = usize::try_from(remaining_len).map_err(|_| Error::BufferTooShort {
-		need: usize::MAX,
-		have: packet.len(),
-	})?;
+	let remaining_len = read_varint_at(packet, &mut cursor)? as usize;
 
 	let payload_end = cursor
 		.checked_add(remaining_len)
@@ -168,16 +152,16 @@ pub fn peek_short_header_dcid(packet: &[u8], cid_len: usize) -> Option<&[u8]> {
 	packet.get(1..1 + cid_len)
 }
 
-fn read_cid(packet: &[u8], offset: usize) -> Result<(&[u8], usize), Error> {
-	let &cid_len_byte = packet.get(offset).ok_or(Error::BufferTooShort {
-		need: offset + 1,
+fn read_cid<'d>(packet: &'d [u8], offset: &mut usize) -> Result<&'d [u8], Error> {
+	let &cid_len_byte = packet.get(*offset).ok_or(Error::BufferTooShort {
+		need: *offset + 1,
 		have: packet.len(),
 	})?;
 	if cid_len_byte > 20 {
 		return Err(Error::InvalidCidLength(cid_len_byte));
 	}
 	let cid_len = cid_len_byte as usize;
-	let start = offset + 1;
+	let start = *offset + 1;
 	let end = start + cid_len;
 	if end > packet.len() {
 		return Err(Error::BufferTooShort {
@@ -185,5 +169,6 @@ fn read_cid(packet: &[u8], offset: usize) -> Result<(&[u8], usize), Error> {
 			have: packet.len(),
 		});
 	}
-	Ok((&packet[start..end], end))
+	*offset = end;
+	Ok(&packet[start..end])
 }
