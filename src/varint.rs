@@ -9,16 +9,16 @@ use crate::error::Error;
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidVarint`] when `buf` is empty or too short for the
+/// Returns [`Error::BufferTooShort`] when `buf` is empty or too short for the
 /// indicated encoding length.
 #[must_use = "returns the decoded value without modifying the buffer"]
 pub fn read_varint(buf: &[u8]) -> Result<(u64, usize), Error> {
-	let &first = buf.first().ok_or(Error::InvalidVarint)?;
+	let &first = buf.first().ok_or(Error::BufferTooShort { need: 1, have: buf.len() })?;
 	let prefix = first >> 6;
 	let len = 1usize << prefix;
 
 	if buf.len() < len {
-		return Err(Error::InvalidVarint);
+		return Err(Error::BufferTooShort { need: len, have: buf.len() });
 	}
 
 	let mut val = u64::from(first & 0x3f);

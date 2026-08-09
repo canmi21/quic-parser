@@ -42,8 +42,4 @@ pub enum Error {
 		/// The byte offset within the decrypted payload where truncation occurred.
 		offset: u64,
 	},
-
-	/// The variable-length integer encoding is malformed.
-	#[error("invalid varint encoding")]
-	InvalidVarint,
 }

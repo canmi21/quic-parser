@@ -51,19 +51,19 @@ fn eight_byte_example() {
 
 #[test]
 fn empty_buffer_fails() {
-	assert!(matches!(read_varint(&[]), Err(Error::InvalidVarint)));
+	assert!(matches!(read_varint(&[]), Err(Error::BufferTooShort { need: 1, have: 0 })));
 }
 
 #[test]
 fn truncated_two_byte() {
-	assert!(matches!(read_varint(&[0x40]), Err(Error::InvalidVarint)));
+	assert!(matches!(read_varint(&[0x40]), Err(Error::BufferTooShort { need: 2, have: 1 })));
 }
 
 #[test]
 fn truncated_four_byte() {
 	assert!(matches!(
 		read_varint(&[0x80, 0x00]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 4, have: 2 })
 	));
 }
 
@@ -71,7 +71,7 @@ fn truncated_four_byte() {
 fn truncated_eight_byte() {
 	assert!(matches!(
 		read_varint(&[0xc0, 0x00, 0x00]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 8, have: 3 })
 	));
 }
 
@@ -161,7 +161,7 @@ fn truncated_four_byte_at_two() {
 	// 4-byte varint (prefix 10) with only 2 bytes provided
 	assert!(matches!(
 		read_varint(&[0x80, 0x01]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 4, have: 2 })
 	));
 }
 
@@ -170,7 +170,7 @@ fn truncated_four_byte_at_three() {
 	// 4-byte varint (prefix 10) with only 3 bytes provided
 	assert!(matches!(
 		read_varint(&[0x80, 0x01, 0x02]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 4, have: 3 })
 	));
 }
 
@@ -179,7 +179,7 @@ fn truncated_eight_byte_at_four() {
 	// 8-byte varint (prefix 11) with only 4 bytes provided
 	assert!(matches!(
 		read_varint(&[0xc0, 0x01, 0x02, 0x03]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 8, have: 4 })
 	));
 }
 
@@ -188,6 +188,6 @@ fn truncated_eight_byte_at_seven() {
 	// 8-byte varint (prefix 11) with only 7 bytes provided
 	assert!(matches!(
 		read_varint(&[0xc0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
-		Err(Error::InvalidVarint)
+		Err(Error::BufferTooShort { need: 8, have: 7 })
 	));
 }
