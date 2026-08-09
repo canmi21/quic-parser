@@ -1,7 +1,7 @@
 /* src/crypto.rs */
 
 use aes::Aes128;
-use aes::cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray};
+use aes::cipher::{BlockCipherEncrypt, KeyInit, array::Array};
 
 use crate::error::Error;
 use crate::header::InitialHeader;
@@ -79,7 +79,7 @@ fn remove_header_protection(
 		Aes128::new_from_slice(hp_key).map_err(|e| Error::DecryptionFailed(format!("HP key: {e}")))?;
 	let mut mask = [0u8; 16];
 	mask.copy_from_slice(&payload[4..20]);
-	cipher.encrypt_block(GenericArray::from_mut_slice(&mut mask));
+	cipher.encrypt_block(Array::cast_from_core_mut(&mut mask));
 
 	let unprotected_first = first_byte ^ (mask[0] & 0x0f);
 	let pn_len = usize::from((unprotected_first & 0x03) + 1);
