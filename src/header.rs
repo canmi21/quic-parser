@@ -1,7 +1,7 @@
 /* src/header.rs */
 
 use crate::error::Error;
-use crate::varint::read_varint;
+use crate::varint::read_varint_at;
 
 /// Parsed QUIC Initial packet header with zero-copy references into the
 /// original packet buffer.
@@ -76,12 +76,7 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 	let dcid = read_cid(packet, &mut cursor)?;
 	let scid = read_cid(packet, &mut cursor)?;
 
-	let (token_len, varint_len) =
-		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
-			need: cursor + 1,
-			have: packet.len(),
-		})?)?;
-	let cursor = cursor + varint_len;
+	let token_len = read_varint_at(packet, &mut cursor)?;
 	let token_len = usize::try_from(token_len).map_err(|_| Error::BufferTooShort {
 		need: usize::MAX,
 		have: packet.len(),
@@ -98,14 +93,9 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		});
 	}
 	let token = &packet[cursor..token_end];
-	let cursor = token_end;
+	cursor = token_end;
 
-	let (remaining_len, varint_len) =
-		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
-			need: cursor + 1,
-			have: packet.len(),
-		})?)?;
-	let cursor = cursor + varint_len;
+	let remaining_len = read_varint_at(packet, &mut cursor)?;
 	let remaining_len = usize::try_from(remaining_len).map_err(|_| Error::BufferTooShort {
 		need: usize::MAX,
 		have: packet.len(),

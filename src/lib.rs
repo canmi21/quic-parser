@@ -31,7 +31,7 @@ mod frame;
 
 pub use error::Error;
 pub use header::{InitialHeader, parse_initial, peek_long_header_dcid, peek_short_header_dcid};
-pub use varint::read_varint;
+pub use varint::read_varint_at;
 
 #[cfg(any(feature = "ring", feature = "aws-lc-rs"))]
 pub use crypto::decrypt_initial;

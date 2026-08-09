@@ -1,7 +1,7 @@
 /* src/frame.rs */
 
 use crate::error::Error;
-use crate::varint::read_varint;
+use crate::varint::read_varint_at;
 
 /// A single CRYPTO frame extracted from decrypted QUIC payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -28,22 +28,13 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 	let mut frames = Vec::new();
 
 	while cursor < decrypted.len() {
-		let (frame_type, len) = read_varint(&decrypted[cursor..])?;
-		cursor += len;
+		let frame_type = read_varint_at(decrypted, &mut cursor)?;
 
 		match frame_type {
 			0x06 => {
-				let (offset, off_len) =
-					read_varint(decrypted.get(cursor..).ok_or(Error::TruncatedFrame {
-						offset: cursor as u64,
-					})?)?;
-				cursor += off_len;
+				let offset = read_varint_at(decrypted, &mut cursor)?;
 
-				let (length, len_len) =
-					read_varint(decrypted.get(cursor..).ok_or(Error::TruncatedFrame {
-						offset: cursor as u64,
-					})?)?;
-				cursor += len_len;
+				let length = read_varint_at(decrypted, &mut cursor)?;
 				let length = usize::try_from(length).map_err(|_| Error::TruncatedFrame {
 					offset: cursor as u64,
 				})?;
@@ -76,34 +67,25 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 ///   First ACK Range (i), { Gap (i), ACK Range Length (i) } * count,
 ///   [ECN Counts: ECT0 (i), ECT1 (i), ECN-CE (i)]  — only for type 0x03.
 fn skip_ack_frame(buf: &[u8], mut cursor: usize, has_ecn: bool) -> Result<usize, Error> {
-	let trunc = |pos: usize| Error::TruncatedFrame { offset: pos as u64 };
-
 	// Largest Acknowledged
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 	// ACK Delay
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 	// ACK Range Count
-	let (range_count, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	let range_count = read_varint_at(buf, &mut cursor)?;
 	// First ACK Range
-	let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-	cursor += len;
+	_ = read_varint_at(buf, &mut cursor)?;
 
 	// Each additional ACK Range: Gap (i) + ACK Range Length (i)
 	for _ in 0..range_count {
-		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-		cursor += len;
-		let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-		cursor += len;
+		_ = read_varint_at(buf, &mut cursor)?;
+		_ = read_varint_at(buf, &mut cursor)?;
 	}
 
 	// ECN Counts (only for ACK_ECN, type 0x03)
 	if has_ecn {
 		for _ in 0..3 {
-			let (_, len) = read_varint(buf.get(cursor..).ok_or_else(|| trunc(cursor))?)?;
-			cursor += len;
+			_ = read_varint_at(buf, &mut cursor)?;
 		}
 	}
 
