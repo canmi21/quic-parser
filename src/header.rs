@@ -73,8 +73,8 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 		return Err(Error::NotInitialPacket(packet_type));
 	}
 
-	let (dcid, cursor) = read_cid(packet, cursor)?;
-	let (scid, cursor) = read_cid(packet, cursor)?;
+	let dcid = read_cid(packet, &mut cursor)?;
+	let scid = read_cid(packet, &mut cursor)?;
 
 	let (token_len, varint_len) =
 		read_varint(packet.get(cursor..).ok_or(Error::BufferTooShort {
@@ -168,16 +168,16 @@ pub fn peek_short_header_dcid(packet: &[u8], cid_len: usize) -> Option<&[u8]> {
 	packet.get(1..1 + cid_len)
 }
 
-fn read_cid(packet: &[u8], offset: usize) -> Result<(&[u8], usize), Error> {
-	let &cid_len_byte = packet.get(offset).ok_or(Error::BufferTooShort {
-		need: offset + 1,
+fn read_cid<'d>(packet: &'d [u8], offset: &mut usize) -> Result<&'d [u8], Error> {
+	let &cid_len_byte = packet.get(*offset).ok_or(Error::BufferTooShort {
+		need: *offset + 1,
 		have: packet.len(),
 	})?;
 	if cid_len_byte > 20 {
 		return Err(Error::InvalidCidLength(cid_len_byte));
 	}
 	let cid_len = cid_len_byte as usize;
-	let start = offset + 1;
+	let start = *offset + 1;
 	let end = start + cid_len;
 	if end > packet.len() {
 		return Err(Error::BufferTooShort {
@@ -185,5 +185,6 @@ fn read_cid(packet: &[u8], offset: usize) -> Result<(&[u8], usize), Error> {
 			have: packet.len(),
 		});
 	}
-	Ok((&packet[start..end], end))
+	*offset = end;
+	Ok(&packet[start..end])
 }
