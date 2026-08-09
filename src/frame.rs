@@ -5,11 +5,11 @@ use crate::varint::read_varint_at;
 
 /// A single CRYPTO frame extracted from decrypted QUIC payload.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CryptoFrame {
+pub struct CryptoFrame<'data> {
 	/// Byte offset within the crypto stream where this fragment begins.
 	pub offset: u64,
 	/// The raw data carried by this frame.
-	pub data: Vec<u8>,
+	pub data: &'data [u8],
 }
 
 /// Parse all CRYPTO frames from a decrypted Initial packet payload.
@@ -22,7 +22,7 @@ pub struct CryptoFrame {
 ///
 /// Returns [`Error::BufferTooShort`] if a CRYPTO frame extends beyond the
 /// available data.
-pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> {
+pub fn parse_crypto_frames<'d>(decrypted: &'d [u8]) -> Result<Vec<CryptoFrame<'d>>, Error> {
 	let mut cursor = 0;
 	let mut frames = Vec::new();
 
@@ -39,7 +39,7 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 					return Err(Error::BufferTooShort { need: cursor + length, have: decrypted.len() });
 				}
 
-				let data = decrypted[cursor..cursor + length].to_vec();
+				let data = &decrypted[cursor..cursor + length];
 				frames.push(CryptoFrame { offset, data });
 				cursor += length;
 			}
@@ -94,11 +94,11 @@ fn skip_ack_frame(buf: &[u8], mut cursor: usize, has_ecn: bool) -> Result<usize,
 /// fragments starting from offset zero are included; gaps cause the
 /// reassembly to stop at the gap boundary.
 #[must_use]
-pub fn reassemble_crypto_stream(frames: &[CryptoFrame]) -> Vec<u8> {
-	let mut sorted: Vec<&CryptoFrame> = frames.iter().collect();
+pub fn reassemble_crypto_stream<'d>(frames: &[CryptoFrame<'d>]) -> Vec<u8> {
+	let capacity = frames.iter().fold(0, |r, f| r.max(f.offset as usize + f.data.len()));
+	let mut sorted: Vec<&CryptoFrame<'d>> = frames.iter().collect();
 	sorted.sort_by_key(|f| f.offset);
-
-	let mut stream = Vec::new();
+	let mut stream = Vec::with_capacity(capacity);
 	let mut next_offset: u64 = 0;
 
 	for frame in sorted {
