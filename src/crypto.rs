@@ -98,69 +98,12 @@ fn remove_header_protection(
 	Ok((pn, pn_len, unprotected_first))
 }
 
-#[cfg(feature = "ring")]
 mod backend {
 	use crate::error::Error;
+
+	#[cfg(feature = "ring")]
 	use ring::{aead, hkdf};
-
-	struct HkdfLen(usize);
-
-	impl hkdf::KeyType for HkdfLen {
-		fn len(&self) -> usize {
-			self.0
-		}
-	}
-
-	pub(super) fn derive_client_initial_secret(salt: &[u8], dcid: &[u8]) -> Result<Vec<u8>, Error> {
-		let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt);
-		let initial_secret = salt.extract(dcid);
-		let label = super::build_hkdf_label(b"client in", &[], 32)?;
-		expand_prk(&initial_secret, &label, 32)
-	}
-
-	pub(super) fn hkdf_expand_label(
-		secret: &[u8],
-		label: &[u8],
-		len: usize,
-	) -> Result<Vec<u8>, Error> {
-		let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, secret);
-		let info = super::build_hkdf_label(label, &[], len)?;
-		expand_prk(&prk, &info, len)
-	}
-
-	fn expand_prk(prk: &hkdf::Prk, info: &[u8], len: usize) -> Result<Vec<u8>, Error> {
-		let mut out = vec![0u8; len];
-		prk
-			.expand(&[info], HkdfLen(len))
-			.and_then(|okm| okm.fill(&mut out))
-			.map_err(|_| Error::DecryptionFailed("HKDF expand failed".into()))?;
-		Ok(out)
-	}
-
-	pub(super) fn aead_open(
-		key: &[u8],
-		nonce_bytes: &[u8; 12],
-		aad: &[u8],
-		ciphertext: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		let unbound = aead::UnboundKey::new(&aead::AES_128_GCM, key)
-			.map_err(|_| Error::DecryptionFailed("invalid AES-GCM key".into()))?;
-		let opening_key = aead::LessSafeKey::new(unbound);
-		let nonce = aead::Nonce::try_assume_unique_for_key(nonce_bytes)
-			.map_err(|_| Error::DecryptionFailed("invalid nonce".into()))?;
-		let mut buf = ciphertext.to_vec();
-		let plaintext_len = opening_key
-			.open_in_place(nonce, aead::Aad::from(aad), &mut buf)
-			.map_err(|_| Error::DecryptionFailed("AEAD decryption failed".into()))?
-			.len();
-		buf.truncate(plaintext_len);
-		Ok(buf)
-	}
-}
-
-#[cfg(feature = "aws-lc-rs")]
-mod backend {
-	use crate::error::Error;
+	#[cfg(feature = "aws-lc-rs")]
 	use aws_lc_rs::{aead, hkdf};
 
 	struct HkdfLen(usize);
