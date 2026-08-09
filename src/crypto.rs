@@ -43,29 +43,10 @@ fn version_params(version: u32) -> Result<VersionParams, Error> {
 	}
 }
 
-fn build_hkdf_label(label: &[u8], context: &[u8], len: usize) -> Result<Vec<u8>, Error> {
-	let full_label_len = 6 + label.len();
-	let total = 2 + 1 + full_label_len + 1 + context.len();
-	let mut out = Vec::with_capacity(total);
-	let len_u16 = u16::try_from(len)
-		.map_err(|_| Error::DecryptionFailed("HKDF output length overflow".into()))?;
-	let label_u8 = u8::try_from(full_label_len)
-		.map_err(|_| Error::DecryptionFailed("HKDF label length overflow".into()))?;
-	let ctx_u8 = u8::try_from(context.len())
-		.map_err(|_| Error::DecryptionFailed("HKDF context length overflow".into()))?;
-	out.extend_from_slice(&len_u16.to_be_bytes());
-	out.push(label_u8);
-	out.extend_from_slice(b"tls13 ");
-	out.extend_from_slice(label);
-	out.push(ctx_u8);
-	out.extend_from_slice(context);
-	Ok(out)
-}
-
 fn remove_header_protection(
 	first_byte: u8,
 	payload: &[u8],
-	hp_key: &[u8],
+	hp_key: &[u8; 16],
 ) -> Result<(u64, usize, u8), Error> {
 	if payload.len() < 20 {
 		return Err(Error::BufferTooShort {
@@ -74,8 +55,7 @@ fn remove_header_protection(
 		});
 	}
 
-	let cipher =
-		Aes128::new_from_slice(hp_key).map_err(|e| Error::DecryptionFailed(format!("HP key: {e}")))?;
+	let cipher = Aes128::new(Array::cast_from_core(hp_key));
 	let mut mask = [0u8; 16];
 	mask.copy_from_slice(&payload[4..20]);
 	cipher.encrypt_block(Array::cast_from_core_mut(&mut mask));
@@ -114,50 +94,52 @@ mod backend {
 		}
 	}
 
-	pub(super) fn derive_client_initial_secret(salt: &[u8], dcid: &[u8]) -> Result<Vec<u8>, Error> {
+	pub(super) fn derive_client_initial_secret(salt: &[u8], dcid: &[u8], out: &mut [u8; 32]) -> Result<(), Error> {
 		let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt);
 		let initial_secret = salt.extract(dcid);
-		let label = super::build_hkdf_label(b"client in", &[], 32)?;
-		expand_prk(&initial_secret, &label, 32)
+		expand_prk(initial_secret, b"client in", out)
 	}
 
-	pub(super) fn hkdf_expand_label(
+	pub(super) fn hkdf_expand_label<const LEN: usize>(
 		secret: &[u8],
-		label: &[u8],
-		len: usize,
-	) -> Result<Vec<u8>, Error> {
+		label: &'static [u8],
+		out: &mut [u8; LEN],
+	) -> Result<(), Error> {
 		let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, secret);
-		let info = super::build_hkdf_label(label, &[], len)?;
-		expand_prk(&prk, &info, len)
+		expand_prk(prk, label, out)
 	}
 
-	fn expand_prk(prk: &hkdf::Prk, info: &[u8], len: usize) -> Result<Vec<u8>, Error> {
-		let mut out = vec![0u8; len];
+	fn expand_prk<const LEN: usize>(prk: hkdf::Prk, label: &'static [u8], out: &mut [u8; LEN]) -> Result<(), Error> {
+		assert!(LEN <= u16::MAX as usize);
+		assert!(label.len() <= (u8::MAX-6) as usize);
 		prk
-			.expand(&[info], HkdfLen(len))
-			.and_then(|okm| okm.fill(&mut out))
-			.map_err(|_| Error::DecryptionFailed("HKDF expand failed".into()))?;
-		Ok(out)
+			.expand(&[
+				&(LEN as u16).to_be_bytes(),
+				&[6+label.len() as u8],
+				b"tls13 ",
+				label,
+				&[0],
+			], HkdfLen(LEN))
+			.and_then(|okm| okm.fill(out))
+			.map_err(|e| Error::DecryptionFailed(e.to_string()))
 	}
 
 	pub(super) fn aead_open(
-		key: &[u8],
-		nonce_bytes: &[u8; 12],
+		key: &[u8; 16],
+		nonce_bytes: [u8; 12],
 		aad: &[u8],
-		ciphertext: &[u8],
-	) -> Result<Vec<u8>, Error> {
+		buf: &mut Vec<u8>,
+	) -> Result<(), Error> {
 		let unbound = aead::UnboundKey::new(&aead::AES_128_GCM, key)
-			.map_err(|_| Error::DecryptionFailed("invalid AES-GCM key".into()))?;
+			.map_err(|e| Error::DecryptionFailed(e.to_string()))?;
 		let opening_key = aead::LessSafeKey::new(unbound);
-		let nonce = aead::Nonce::try_assume_unique_for_key(nonce_bytes)
-			.map_err(|_| Error::DecryptionFailed("invalid nonce".into()))?;
-		let mut buf = ciphertext.to_vec();
+		let nonce = aead::Nonce::assume_unique_for_key(nonce_bytes);
 		let plaintext_len = opening_key
-			.open_in_place(nonce, aead::Aad::from(aad), &mut buf)
-			.map_err(|_| Error::DecryptionFailed("AEAD decryption failed".into()))?
+			.open_in_place(nonce, aead::Aad::from(aad), buf)
+			.map_err(|e| Error::DecryptionFailed(e.to_string()))?
 			.len();
 		buf.truncate(plaintext_len);
-		Ok(buf)
+		Ok(())
 	}
 }
 
@@ -178,10 +160,15 @@ mod backend {
 pub fn decrypt_initial(header: &InitialHeader<'_>) -> Result<Vec<u8>, Error> {
 	let params = version_params(header.version)?;
 
-	let client_secret = backend::derive_client_initial_secret(params.salt, header.dcid)?;
-	let key = backend::hkdf_expand_label(&client_secret, params.key_label, 16)?;
-	let iv = backend::hkdf_expand_label(&client_secret, params.iv_label, 12)?;
-	let hp = backend::hkdf_expand_label(&client_secret, params.hp_label, 16)?;
+	let mut client_secret = [0_u8; 32];
+	let mut key = [0_u8; 16];
+	let mut iv = [0_u8; 12];
+	let mut hp = [0_u8; 16];
+
+	backend::derive_client_initial_secret(params.salt, header.dcid, &mut client_secret)?;
+	backend::hkdf_expand_label(&client_secret, params.key_label, &mut key)?;
+	backend::hkdf_expand_label(&client_secret, params.iv_label, &mut iv)?;
+	backend::hkdf_expand_label(&client_secret, params.hp_label, &mut hp)?;
 
 	let (pn, pn_len, unprotected_first) =
 		remove_header_protection(header.first_byte, header.payload, &hp)?;
@@ -193,22 +180,22 @@ pub fn decrypt_initial(header: &InitialHeader<'_>) -> Result<Vec<u8>, Error> {
 		aad.push((pn >> (8 * (pn_len - 1 - i))) as u8);
 	}
 
-	let mut nonce = <[u8; 12]>::try_from(iv.as_slice())
-		.map_err(|_| Error::DecryptionFailed("unexpected IV length".into()))?;
+	let mut nonce = iv;
 	let pn_offset = 12 - pn_len;
 	for i in 0..pn_len {
 		nonce[pn_offset + i] ^= (pn >> (8 * (pn_len - 1 - i))) as u8;
 	}
 
-	let encrypted_payload = &header.payload[pn_len..];
+	let mut payload = header.payload[pn_len..].to_vec();
 
 	#[cfg(feature = "tracing")]
 	tracing::debug!(
 		version = header.version,
 		dcid_len = header.dcid.len(),
-		payload_len = encrypted_payload.len(),
+		payload_len = payload.len(),
 		"decrypting QUIC Initial packet"
 	);
 
-	backend::aead_open(&key, &nonce, &aad, encrypted_payload)
+	backend::aead_open(&key, nonce, &aad, &mut payload)?;
+	Ok(payload)
 }
