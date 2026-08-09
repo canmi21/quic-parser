@@ -3,6 +3,9 @@
 use crate::error::Error;
 use crate::varint::read_varint_at;
 
+pub(crate) const QUIC_V1: u32 = 0x0000_0001;
+pub(crate) const QUIC_V2: u32 = 0x6b33_43cf;
+
 /// Parsed QUIC Initial packet header with zero-copy references into the
 /// original packet buffer.
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +69,7 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 
 	// QUIC v2 (RFC 9369) remaps the type field: Initial = 0b01.
 	let expected_initial_type = match version {
-		0x6b33_43cf => 1,
+		QUIC_V2 => 1,
 		_ => 0,
 	};
 	if packet_type != expected_initial_type {

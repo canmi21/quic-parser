@@ -6,8 +6,7 @@ use aes::cipher::{BlockCipherEncrypt, KeyInit, array::Array};
 use crate::error::Error;
 use crate::header::InitialHeader;
 
-const QUIC_V1: u32 = 0x0000_0001;
-const QUIC_V2: u32 = 0x6b33_43cf;
+use crate::header::{QUIC_V1, QUIC_V2};
 
 const INITIAL_SALT_V1: [u8; 20] = [
 	0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad,
