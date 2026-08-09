@@ -20,9 +20,8 @@ pub struct CryptoFrame {
 ///
 /// # Errors
 ///
-/// Returns [`Error::TruncatedFrame`] if a CRYPTO frame extends beyond the
-/// available data. Returns [`Error::InvalidVarint`] if a varint field is
-/// malformed.
+/// Returns [`Error::BufferTooShort`] if a CRYPTO frame extends beyond the
+/// available data.
 pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> {
 	let mut cursor = 0;
 	let mut frames = Vec::new();
@@ -34,13 +33,10 @@ pub fn parse_crypto_frames(decrypted: &[u8]) -> Result<Vec<CryptoFrame>, Error> 
 			0x06 => {
 				let offset = read_varint_at(decrypted, &mut cursor)?;
 
-				let length = read_varint_at(decrypted, &mut cursor)?;
-				let length = usize::try_from(length).map_err(|_| Error::TruncatedFrame {
-					offset: cursor as u64,
-				})?;
+				let length = read_varint_at(decrypted, &mut cursor)? as usize;
 
 				if cursor + length > decrypted.len() {
-					return Err(Error::TruncatedFrame { offset });
+					return Err(Error::BufferTooShort { need: cursor + length, have: decrypted.len() });
 				}
 
 				let data = decrypted[cursor..cursor + length].to_vec();
