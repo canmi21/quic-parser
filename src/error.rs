@@ -35,11 +35,4 @@ pub enum Error {
 	/// AEAD decryption or key derivation failed.
 	#[error("decryption failed: {0}")]
 	DecryptionFailed(String),
-
-	/// A CRYPTO frame was truncated before its declared length.
-	#[error("truncated CRYPTO frame at offset {offset}")]
-	TruncatedFrame {
-		/// The byte offset within the decrypted payload where truncation occurred.
-		offset: u64,
-	},
 }
