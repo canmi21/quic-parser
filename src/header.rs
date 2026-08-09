@@ -76,12 +76,7 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 	let dcid = read_cid(packet, &mut cursor)?;
 	let scid = read_cid(packet, &mut cursor)?;
 
-	let token_len = read_varint_at(packet, &mut cursor)?;
-	let token_len = usize::try_from(token_len).map_err(|_| Error::BufferTooShort {
-		need: usize::MAX,
-		have: packet.len(),
-	})?;
-
+	let token_len = read_varint_at(packet, &mut cursor)? as usize;
 	let token_end = cursor.checked_add(token_len).ok_or(Error::BufferTooShort {
 		need: usize::MAX,
 		have: packet.len(),
@@ -95,11 +90,7 @@ pub fn parse_initial(packet: &[u8]) -> Result<InitialHeader<'_>, Error> {
 	let token = &packet[cursor..token_end];
 	cursor = token_end;
 
-	let remaining_len = read_varint_at(packet, &mut cursor)?;
-	let remaining_len = usize::try_from(remaining_len).map_err(|_| Error::BufferTooShort {
-		need: usize::MAX,
-		have: packet.len(),
-	})?;
+	let remaining_len = read_varint_at(packet, &mut cursor)? as usize;
 
 	let payload_end = cursor
 		.checked_add(remaining_len)
